@@ -1,11 +1,9 @@
-name: Build Waveshare RP2350B Hybrid
+name: Build-Waveshare-RP2350B-Hybrid
 on: [push, workflow_dispatch]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # Aktiviert Node 24 Support
     steps:
       - name: Checkout MicroPython
         uses: actions/checkout@v4
@@ -21,28 +19,24 @@ jobs:
       - name: Build mpy-cross
         run: make -C mpy-cross
 
-      - name: Patch for Waveshare RP2350B-Plus-W Hybrid
+      - name: Patch Board Definition
         run: |
-          BOARD_DIR="ports/rp2/boards/RPI_PICO2_W"
-          # 1. PSRAM Konfiguration (GPIO 47)
-          echo "#define MICROPY_HW_PSRAM_CS_PIN (47)" >> $BOARD_DIR/mpconfigboard.h
-          echo "#define MICROPY_HW_PSRAM_MAX_SEG_SIZE (8 * 1024 * 1024)" >> $BOARD_DIR/mpconfigboard.h
+          # Pfad zur Konfiguration des Pico 2 W
+          CONF="ports/rp2/boards/RPI_PICO2_W/mpconfigboard.h"
           
-          # 2. QMI & PSRAM Support aktivieren
-          echo "#define MICROPY_HW_QMI_SUPPORT (1)" >> $BOARD_DIR/mpconfigboard.h
+          # Bestehende PSRAM-Einträge entfernen, um Dopplungen zu vermeiden
+          sed -i '/MICROPY_HW_PSRAM/d' $CONF
           
-          # 3. WLAN Support (CYW43 für RP2350)
-          echo "#define MICROPY_PY_NETWORK_CYW43 (1)" >> $BOARD_DIR/mpconfigboard.h
+          # PSRAM auf GPIO 47 für Waveshare aktivieren
+          echo "#define MICROPY_HW_PSRAM_CS_PIN (47)" >> $CONF
+          echo "#define MICROPY_HW_PSRAM_MAX_SEG_SIZE (8 * 1024 * 1024)" >> $CONF
           
-          # 4. PIO-Ressourcen Konflikt lösen
-          # Zwingt WLAN auf PIO 1, damit PSRAM auf PIO 0/QMI ungestört bleibt
-          echo "#define CYW43_PIO_INSTANCE 1" >> $BOARD_DIR/mpconfigboard.h
-          
-          # 5. Architektur-Fix für RP2350B
-          echo "#define MICROPY_HW_MCU_RP2350 (1)" >> $BOARD_DIR/mpconfigboard.h
+          # QMI (Speicher-Controller) aktivieren
+          echo "#define MICROPY_HW_QMI_SUPPORT (1)" >> $CONF
 
       - name: Build Firmware
         run: |
+          # Wir bauen für das Board RPI_PICO2_W, aber erzwingen den RP2350 Chip
           make -C ports/rp2 BOARD=RPI_PICO2_W BOARD_VARIANT=rp2350
 
       - name: Upload Artifact
